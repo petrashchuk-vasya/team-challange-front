@@ -1,12 +1,46 @@
+version: '3.9'
+
 services:
-  app:
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
     environment:
-      NODE_ENV: test
+      NODE_ENV: production
+    networks:
+      - testnet
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  tests:
+    image: mcr.microsoft.com/playwright:v1.43.1-jammy
+    depends_on:
+      frontend:
+        condition: service_healthy
+    working_dir: /tests
+    networks:
+      - testnet
+    volumes:
+      - ./taf_playwright_ts_js:/tests
+      - playwright-cache:/root/.cache/ms-playwright
+      - ./playwright-report:/tests/playwright-report
+    environment:
+      FRONTEND_URL: http://frontend:3000
+      CI: "true"
+    command: >
+      bash -lc "
+        npm ci &&
+        npx playwright install &&
+        npm run test
+      "
+
+networks:
+  testnet:
+
+volumes:
+  playwright-cache:
